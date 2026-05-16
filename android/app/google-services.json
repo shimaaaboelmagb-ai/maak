@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "245885129906",
+    "project_id": "saadp-88043",
+    "storage_bucket": "saadp-88043.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:245885129906:android:acfd2a00b6d5c66d8b65ab",
+        "android_client_info": {
+          "package_name": "com.example.projectgrad"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDBU8YU6f9RduJrgkvKbd1buR4zl_as9HI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
