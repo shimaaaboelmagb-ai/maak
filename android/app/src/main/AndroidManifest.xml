@@ -24,7 +24,9 @@
         android:label="MAAK"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
+        android:largeHeap="true"
         android:usesCleartextTraffic="true">
+        
         
         <activity
             android:name=".MainActivity"
