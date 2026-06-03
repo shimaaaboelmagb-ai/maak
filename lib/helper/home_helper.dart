@@ -12,6 +12,7 @@ import 'all_nearby_alerts.dart';
 import 'chat_with_helper.dart';
 import 'quick_signs_screen.dart';
 import 'profile_helper.dart';
+import 'package:projectgrad/community_screen.dart';
 
 class HelperHomeScreen extends StatefulWidget {
   const HelperHomeScreen({super.key});
@@ -184,7 +185,6 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
     }
   }
 
-  // الـ View المخصص لمحتوى الشاشة الرئيسية بداخل الـ Stream الخاص به
   Widget _buildHomeView(String uid) {
     return StreamBuilder<DocumentSnapshot>(
       stream: _firestore.collection('helpers').doc(uid).snapshots(),
@@ -313,7 +313,9 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF1F7FD),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF1A4D7A).withOpacity(0.1)),
+        border: Border.all(
+          color: const Color(0xFF1A4D7A).withValues(alpha: 0.1),
+        ),
       ),
       child: Row(
         children: [
@@ -373,7 +375,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isMyAcceptedMission
-              ? Colors.green.withOpacity(0.3)
+              ? Colors.green.withValues(alpha: 0.3)
               : Colors.grey[200]!,
         ),
       ),
@@ -643,7 +645,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
           borderRadius: BorderRadius.circular(35),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 30,
               offset: const Offset(0, 10),
             ),
@@ -655,7 +657,12 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
             _buildNavItem(icon: Icons.home_filled, index: 0),
             _buildNavItem(icon: Icons.sign_language, index: 1),
             _buildNavItem(icon: Icons.translate, index: 2),
-            _buildNavItem(icon: Icons.person_outline, index: 3),
+            _buildNavItem(
+              icon: Icons
+                  .people_alt_outlined, // 👈 تم التعديل هنا لتكون أيقونة أشخاص بجانب بعضهم
+              index: 3,
+            ),
+            _buildNavItem(icon: Icons.person_outline, index: 4),
           ],
         ),
       ),
@@ -671,7 +678,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF5BA3C1).withOpacity(0.15)
+              ? const Color(0xFF5BA3C1).withValues(alpha: 0.15)
               : Colors.transparent,
           shape: BoxShape.circle,
         ),
@@ -694,11 +701,11 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
       );
     }
 
-    // المصفوفة مستقرة بالكامل وتم حل تعارض الـ const مع شاشة الـ AI Translator
     final List<Widget> screens = [
       _buildHomeView(uid),
       const QuickSignsScreen(),
-      AiTranslatorScreen(), // تعمل ديناميكياً بدون const لمنع أخطاء الـ Compile
+      AiTranslatorScreen(),
+      const CommunityScreen(isDarkMode: false),
       const ProfileHelperScreen(),
     ];
 
