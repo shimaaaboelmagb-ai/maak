@@ -69,20 +69,14 @@
     controls.update();
 
     // ── Bone & skeleton cache ──────────────────────────────
-    const boneMap       = {};   // name → THREE.Bone
-    const skinnedMeshes = [];   // THREE.SkinnedMesh[]
-    const bindPoseQ     = {};   // name → THREE.Quaternion (bind pose, saved at load)
+    const boneMap       = {};   
+    const skinnedMeshes = [];   
+    const bindPoseQ     = {};   
 
     // ── Load GLB ───────────────────────────────────────────
     const overlay = document.getElementById('overlay');
     const loader  = new GLTFLoader();
 
-    // Model is loaded by Flutter calling window.loadModelFromBase64(b64)
-    // after the page is ready (avoids file:// fetch restrictions)
-
-    // ── Internal helpers ───────────────────────────────────
-
-    // Restore every bone to its saved bind pose
     function restoreBindPose() {
       for (const [name, bone] of Object.entries(boneMap)) {
         if (bindPoseQ[name]) bone.quaternion.copy(bindPoseQ[name]);
@@ -90,19 +84,22 @@
     }
 
     const _tmpEuler = new THREE.Euler();
-    const _tmpQ     = new THREE.Quaternion();
 
-    // Apply one frame — set animated bones directly, leave others untouched.
-    // NO bind-pose restore: the developer designed the system to apply values
-    // directly on top of whatever pose the bone is currently in.
-    // Non-animated bones naturally keep their GLTF bind pose.
+    // 🛠️ [تعديل حرج لحل مشكلة رفع الأذرع]: ضبط المحاور والترتيب ليتناسب مع الموبايل والسيرفر معاً
     function applyBones(boneData) {
       for (const name in boneData) {
         const bone = boneMap[name];
         if (!bone) continue;
+        
         const [p, h, r] = boneData[name];
-        // Direct mapping: p→X, h→Y, r→Z (degrees already converted to radians in Dart)
-        _tmpEuler.set(p, h, r, 'XYZ');
+        
+        // تعديل الإشارات لمنع التداخل والارتفاع المفاجئ للكتف والدراع
+        let corrected_X = p;   
+        let corrected_Y = h;   
+        let corrected_Z = -r;  
+
+        // استخدام ترتيب دوران YXZ لمنع حدوث الـ Gimbal Lock في أذرع الموديل
+        _tmpEuler.set(corrected_X, corrected_Y, corrected_Z, 'YXZ');
         bone.quaternion.setFromEuler(_tmpEuler);
       }
 
@@ -111,13 +108,11 @@
       }
     }
 
-    // ── Public API (called from Flutter via runJavaScript) ──
+    // ── Public API ─────────────────────────────────────────
 
-    // Called once at startup: Flutter passes the GLB as base64
     window.loadModelFromBase64 = function(b64) {
       overlay.textContent = 'Processing model…';
       try {
-        // base64 → Uint8Array → Blob → object URL (bypasses file:// restriction)
         const bin = atob(b64);
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -134,7 +129,6 @@
             gltf.scene.traverse(node => {
               if (node.isBone) {
                 boneMap[node.name] = node;
-                // Save bind pose quaternion so we can restore it every frame
                 bindPoseQ[node.name] = node.quaternion.clone();
               }
               if (node.isSkinnedMesh) {
@@ -143,22 +137,17 @@
               }
             });
             overlay.classList.add('hidden');
-            console.log('[viewer] bones=' + Object.keys(boneMap).length +
-                        ' meshes=' + skinnedMeshes.length);
           },
           (xhr) => {
             if (xhr.total > 0)
-              overlay.textContent = 'Loading ' +
-                Math.round(xhr.loaded / xhr.total * 100) + '%';
+              overlay.textContent = 'Loading ' + Math.round(xhr.loaded / xhr.total * 100) + '%';
           },
           (err) => {
             overlay.textContent = 'Error loading model';
-            console.error('[viewer] load error', err);
           }
         );
       } catch (err) {
         overlay.textContent = 'Error processing model';
-        console.error('[viewer] base64 error', err);
       }
     };
 
@@ -166,8 +155,7 @@
       const frames = JSON.parse(framesJson);
       if (!frames || frames.length === 0) return;
 
-      const SPEED = 1.5;  
-
+      const SPEED = 1.2;  
       let startTime = null;
       let lastIdx   = -1;
 
@@ -175,7 +163,6 @@
         if (!startTime) startTime = ts;
         const elapsed = (ts - startTime) / 1000 * SPEED;
 
-        // Binary-search the latest frame whose time ≤ elapsed
         let idx = 0;
         for (let i = 0; i < frames.length; i++) {
           if (frames[i].time <= elapsed) idx = i;
@@ -187,22 +174,11 @@
           lastIdx = idx;
         }
 
-        if (elapsed < frames[frames.length - 1].time + 0.3) {
+        if (elapsed < frames[frames.length - 1].time + 0.2) {
           requestAnimationFrame(loop);
-        } else {
-          console.log('[viewer] animation done, frames=' + (lastIdx + 1));
         }
       }
-
       requestAnimationFrame(loop);
-    };
-
-    // Reset = go back to bind pose (NOT to zero!)
-    // Reset camera to front view
-    window.resetCamera = function() {
-      camera.position.set(0, 0.9, 3.8);
-      controls.target.set(0, 0.9, 0);
-      controls.update();
     };
 
     window.resetPose = function() {
@@ -212,119 +188,6 @@
       }
     };
 
-    window.listBones = function() {
-      const names = Object.keys(boneMap);
-      console.log('[viewer] === BONES (' + names.length + ') ===');
-      names.forEach(n => console.log('  -', n));
-    };
-
-    // ── Diagnostic tools ──────────────────────────────────
-
-    // Send message back to Flutter (shown as a dialog)
-    function toFlutter(msg) {
-      if (window.FlutterDebug) window.FlutterDebug.postMessage(msg);
-      console.log('[debug]', msg);
-    }
-
-    // Check if bones have non-zero rest pose (would break direct set())
-    window.checkRestPose = function() {
-      let lines = [];
-      let nonZero = 0;
-      Object.entries(boneMap).forEach(([name, bone]) => {
-        const r = bone.rotation;
-        const rx = (r.x * 180 / Math.PI).toFixed(1);
-        const ry = (r.y * 180 / Math.PI).toFixed(1);
-        const rz = (r.z * 180 / Math.PI).toFixed(1);
-        if (Math.abs(r.x) > 0.01 || Math.abs(r.y) > 0.01 || Math.abs(r.z) > 0.01) {
-          lines.push(name + '\n  x=' + rx + '° y=' + ry + '° z=' + rz + '°');
-          nonZero++;
-        }
-      });
-      const total = Object.keys(boneMap).length;
-      const summary = 'Non-zero rest bones: ' + nonZero + ' / ' + total + '\n\n' + lines.join('\n');
-      toFlutter(summary);
-    };
-
-    // Quick hello test with different axis mappings — find which one looks right
-    window.testHelloMapping = function(mapping) {
-      restoreBindPose();
-      const DEG = Math.PI / 180;
-      // hello data: RightArm{h=-20,p=65,r=0}, RightForeArm{h=0,p=0,r=30}, RightHand{h=50,p=0,r=0}
-      const data = {
-        'mixamorig10RightArm':    { h:-20*DEG, p:65*DEG,  r:0 },
-        'mixamorig10RightForeArm':{ h:0,       p:0,       r:30*DEG },
-        'mixamorig10RightHand':   { h:50*DEG,  p:0,       r:0 }
-      };
-      for (const name in data) {
-        const bone = boneMap[name];
-        if (!bone) continue;
-        const d = data[name];
-        let x, y, z;
-        switch (mapping) {
-          case 'p,h,r':    x= d.p; y= d.h; z= d.r; break;  // current
-          case '-p,h,r':   x=-d.p; y= d.h; z= d.r; break;  // negate pitch only
-          case '-p,-h,r':  x=-d.p; y=-d.h; z= d.r; break;  // negate pitch+heading
-          case 'p,-h,r':   x= d.p; y=-d.h; z= d.r; break;  // negate heading only
-          case '-p,-h,-r': x=-d.p; y=-d.h; z=-d.r; break;  // negate all
-          case 'r,h,p':    x= d.r; y= d.h; z= d.p; break;  // swap p/r
-          default: return;
-        }
-        _tmpEuler.set(x, y, z, 'XYZ');
-        bone.quaternion.setFromEuler(_tmpEuler);
-      }
-      skinnedMeshes.forEach(m => { if (m.skeleton) m.skeleton.update(); });
-      toFlutter('Mapping: ' + mapping + '\nWatch the right arm — should raise UP toward camera for hello wave');
-    };
-
-    // Test ONE bone with direct X/Y/Z values — call from Flutter console:
-    // window.testBone('mixamorig10RightArm', 90, 0, 0)  → should raise arm if X is correct
-    // window.testBone('mixamorig10RightArm', 0, 90, 0)  → test Y axis
-    // window.testBone('mixamorig10RightArm', 0, 0, 90)  → test Z axis
-    window.testBone = function(boneName, xDeg, yDeg, zDeg) {
-      restoreBindPose();
-      skinnedMeshes.forEach(m => { if (m.skeleton) m.skeleton.update(); });
-      const bone = boneMap[boneName];
-      if (!bone) { toFlutter('Bone not found: ' + boneName); return; }
-      bone.rotation.set(
-        xDeg * Math.PI / 180,
-        yDeg * Math.PI / 180,
-        zDeg * Math.PI / 180
-      );
-      skinnedMeshes.forEach(m => m.skeleton.update());
-      toFlutter('Applied to ' + boneName + ':\nX=' + xDeg + '°  Y=' + yDeg + '°  Z=' + zDeg + '°\n\nWatch how the arm moved!');
-    };
-
-    // Try all 6 axis combinations for h/p/r mapping (call and observe which looks correct)
-    window.testMapping = function(boneName, hDeg, pDeg, rDeg) {
-      const toR = d => d * Math.PI / 180;
-      const h = toR(hDeg), p = toR(pDeg), r = toR(rDeg);
-      const mappings = {
-        'p,h,r (current)': [p, h, r],
-        'h,p,r':           [h, p, r],
-        'r,h,p':           [r, h, p],
-        'h,r,p':           [h, r, p],
-        'p,r,h':           [p, r, h],
-        'r,p,h':           [r, p, h],
-      };
-      console.log('[mapping] Testing bone: ' + boneName +
-                  ' h=' + hDeg + ' p=' + pDeg + ' r=' + rDeg);
-      console.log('[mapping] Call window.applyMapping(boneName, mappingName) to test each');
-      window._lastMappings = { boneName, mappings };
-      Object.keys(mappings).forEach(k => console.log('  → ' + k));
-    };
-
-    window.applyMapping = function(boneName, mappingName) {
-      if (!window._lastMappings) { console.error('Call testMapping first'); return; }
-      window.resetPose();
-      const bone = boneMap[boneName];
-      if (!bone) { console.error('Bone not found: ' + boneName); return; }
-      const m = window._lastMappings.mappings[mappingName];
-      if (!m) { console.error('Unknown mapping: ' + mappingName); return; }
-      bone.rotation.set(m[0], m[1], m[2]);
-      skinnedMeshes.forEach(ms => ms.skeleton.update());
-      console.log('[mapping] Applied: ' + mappingName);
-    };
-
     // ── Resize ─────────────────────────────────────────────
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -332,7 +195,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // ── Render loop (always running, no idle pausing) ──────
+    // ── Render loop ────────────────────────────────────────
     function render() {
       requestAnimationFrame(render);
       controls.update();

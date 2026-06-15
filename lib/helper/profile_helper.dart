@@ -1,9 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
 class ProfileHelperScreen extends StatefulWidget {
   const ProfileHelperScreen({super.key});
@@ -15,16 +15,16 @@ class ProfileHelperScreen extends StatefulWidget {
 class _ProfileHelperScreenState extends State<ProfileHelperScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
 
   bool _isUploading = false;
 
+  // ✨ دالة الرفع السحرية بنفس فكرة كود صاحبك (حفظ مباشر في Firestore بدون Storage)
   Future<void> _pickAndUploadImage(ImageSource source) async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 70,
+        imageQuality: 50, // تقليل الجودة لتصغير حجم النص المحفوظ
       );
 
       if (pickedFile == null) return;
@@ -36,19 +36,14 @@ class _ProfileHelperScreenState extends State<ProfileHelperScreen> {
       String? uid = _auth.currentUser?.uid;
       if (uid == null) return;
 
+      // 1. قراءة الملف وتحويله إلى سطر نصي (Base64 String)
       File file = File(pickedFile.path);
+      List<int> imageBytes = await file.readAsBytes();
+      String base64Image = base64Encode(imageBytes);
 
-      Reference ref = _storage
-          .ref()
-          .child('profile_pictures')
-          .child('$uid.jpg');
-      UploadTask uploadTask = ref.putFile(file);
-      TaskSnapshot snapshot = await uploadTask;
-
-      String downloadUrl = await snapshot.ref.getDownloadURL();
-
+      // 2. الحفظ المباشر داخل ديسيومنت Firestore زي كود صاحبك بالظبط
       await _firestore.collection('helpers').doc(uid).update({
-        'profilePic': downloadUrl,
+        'profilePic': base64Image, // بنخزن النص هنا
       });
 
       if (!mounted) return;
@@ -62,7 +57,7 @@ class _ProfileHelperScreenState extends State<ProfileHelperScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("فشل في رفع الصورة: $e"),
+          content: Text("فشل في حفظ الصورة: $e"),
           backgroundColor: Colors.red,
         ),
       );
@@ -219,7 +214,6 @@ class _ProfileHelperScreenState extends State<ProfileHelperScreen> {
             return const Center(child: Text("No data available."));
           }
 
-          // جلب البيانات ديناميكياً بدون تثبيت نصوص افتراضية تسبب ثبات البيانات
           String name = data['fullName'] ?? "Name Not Set";
           String bio = data['bio'] ?? "Joined Oct 2023";
           String? profilePic = data['profilePic'];
@@ -249,13 +243,15 @@ class _ProfileHelperScreenState extends State<ProfileHelperScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: const Color(0xFFD6EFFE),
-                            // تم تعديل هذا الشرط: لو بيرفع يعرض لودر، غير كدة يعرض الصورة أو الحرف الأول
                             image:
                                 (!_isUploading &&
                                     profilePic != null &&
                                     profilePic.isNotEmpty)
                                 ? DecorationImage(
-                                    image: NetworkImage(profilePic),
+                                    // ✨ تعديل عرض الصورة عشان يقرا النص المشفر (Base64) مباشرة
+                                    image: MemoryImage(
+                                      base64Decode(profilePic),
+                                    ),
                                     fit: BoxFit.cover,
                                   )
                                 : null,
@@ -334,7 +330,6 @@ class _ProfileHelperScreenState extends State<ProfileHelperScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              // تم تعديل الـ Bio هنا ليعرض القيمة القادمة من الـ Firestore ديناميكياً بدلاً من النص الثابت القديم
                               Text(
                                 "  •  $bio",
                                 style: const TextStyle(

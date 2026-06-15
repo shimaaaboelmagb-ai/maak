@@ -19,6 +19,7 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
   bool _isLoading = false;
   String _statusText = '';
 
+  // رابط الـ API الخاص بك على Hugging Face Spaces
   static const String _apiUrl =
       'https://ismailabdulsalam-avater-api.hf.space/translate';
 
@@ -47,12 +48,9 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
 
   Future<void> _loadViewerHtml() async {
     final String html = await rootBundle.loadString('assets/viewer.html');
-    // No baseUrl needed — GLB is passed directly from Flutter as base64
     await _webViewController.loadHtmlString(html);
   }
 
-  // Read GLB bytes → base64 → call window.loadModelFromBase64(b64) in JS
-  // Blob URL created in JS bypasses file:// fetch restrictions
   Future<void> _sendModelToWebView() async {
     try {
       final data = await rootBundle.load('assets/pro.glb');
@@ -156,7 +154,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
     ),
   );
 
-  // Send all frames to JS in one call — JS handles the animation loop
   Future<void> _playAnimation(List<Map<String, dynamic>> frames) async {
     if (frames.isEmpty) return;
 
@@ -167,12 +164,12 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
         .runJavaScript('window.playAnimation(${jsonEncode(framesJson)})')
         .catchError((e) => debugPrint('[JS] playAnimation error: $e'));
 
-    // Wait in Dart while JS animates
     await Future.delayed(
       Duration(milliseconds: (totalSec * 1000).round() + 100),
     );
   }
 
+  // 🎯 الدالة المحدثة كلياً لتتوافق مع الـ API الجديد وتمنع خطأ الـ Format
   Future<void> _translate() async {
     final String text = _textController.text.trim();
     if (text.isEmpty) return;
@@ -196,44 +193,35 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
       if (response.statusCode == 200) {
         final dynamic json = jsonDecode(response.body);
 
-        if (json is Map<String, dynamic> && json['data'] is List) {
-          // Collect all frames from all words, convert degrees → radians once
+        // هنا بنقرأ مصفوفة الـ frames مباشرة من السيرفر الجديد
+        if (json is Map<String, dynamic> && json['frames'] is List) {
           final List<Map<String, dynamic>> allFrames = [];
           double timeOffset = 0.0;
+          final rawFrames = json['frames'] as List;
 
-          for (final word in json['data'] as List) {
-            if (word is! Map<String, dynamic>) continue;
-            final rawFrames = word['frames'];
-            if (rawFrames is! List || rawFrames.isEmpty) continue;
+          for (int i = 0; i < rawFrames.length; i++) {
+            final frame = rawFrames[i];
+            if (frame is! Map<String, dynamic>) continue;
 
-            for (final frame in rawFrames) {
-              if (frame is! Map<String, dynamic>) continue;
-              final pose = frame['pose'];
-              if (pose is! Map<String, dynamic>) continue;
+            final Map<String, List<double>> bones = {};
 
-              final Map<String, List<double>> bones = {};
-              pose.forEach((name, angles) {
-                if (angles is Map<String, dynamic>) {
-                  final double h =
-                      ((angles['h'] ?? 0) as num).toDouble() * (math.pi / 180);
-                  final double p =
-                      ((angles['p'] ?? 0) as num).toDouble() * (math.pi / 180);
-                  final double r =
-                      ((angles['r'] ?? 0) as num).toDouble() * (math.pi / 180);
-                  // "mixamorig10:RightArm" → "mixamorig10RightArm"
-                  bones[name.replaceAll(':', '')] = [p, h, r];
-                }
-              });
+            // نلف على الـ Bones مباشرة لأن العظام أصبحت في الـ Root بتاع الـ frame
+            frame.forEach((name, angles) {
+              if (angles is Map<String, dynamic>) {
+                final double h =
+                    ((angles['h'] ?? 0) as num).toDouble() * (math.pi / 180);
+                final double p =
+                    ((angles['p'] ?? 0) as num).toDouble() * (math.pi / 180);
+                final double r =
+                    ((angles['r'] ?? 0) as num).toDouble() * (math.pi / 180);
 
-              allFrames.add({
-                'time': timeOffset + ((frame['time'] ?? 0) as num).toDouble(),
-                'bones': bones,
-              });
-            }
+                // تنظيف الـ Key من النقطتين (:) لتتوافق مع الـ Three.js في الـ WebView
+                bones[name.replaceAll(':', '')] = [p, h, r];
+              }
+            });
 
-            if (allFrames.isNotEmpty) {
-              timeOffset = (allFrames.last['time'] as double) + 0.4;
-            }
+            // حساب التوقيت الزمني لكل فريم تلقائياً (50 فريم في الثانية = 0.02 ثانية لكل فريم)
+            allFrames.add({'time': timeOffset + (i * 0.02), 'bones': bones});
           }
 
           if (allFrames.isNotEmpty) {
