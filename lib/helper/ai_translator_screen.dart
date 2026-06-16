@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:speech_to_text/speech_to_text.dart'
-    as stt; // 🎤 استيراد مكتبة الصوت
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class AiTranslatorScreen extends StatefulWidget {
   const AiTranslatorScreen({super.key});
@@ -16,7 +15,6 @@ class AiTranslatorScreen extends StatefulWidget {
 }
 
 class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
-  // 🎨 درجات الألوان المحدثة بناءً على الصورة المطلوبة تماماً
   static const Color appPrimaryColor = Color(0xFF4E9BB6);
   static const Color appBackgroundColor = Color(0xFFF3F7F9);
   static const Color appSoftBlue = Color(0xFFD6E6ED);
@@ -26,20 +24,17 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
   bool _isLoading = false;
   String _statusText = '';
 
-  // 🎤 متغيرات تحويل الصوت إلى كلام واللغة
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
-  bool _isArabic =
-      true; // متغير التحكم في لغة السويتش (true = عربي، false = إنجليزي)
+  bool _isArabic = true;
 
-  // رابط الـ API الخاص بك على Hugging Face Spaces كما هو
   static const String _apiUrl =
       'https://ismailabdulsalam-avater-api.hf.space/translate';
 
   @override
   void initState() {
     super.initState();
-    _initSpeech(); // تهيئة خدمة الصوت عند بدء الشاشة
+    _initSpeech();
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(appBackgroundColor)
@@ -60,7 +55,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
     _loadViewerHtml();
   }
 
-  // 🎤 دالة تهيئة الصوت
   Future<void> _initSpeech() async {
     try {
       await _speech.initialize(
@@ -72,7 +66,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
     }
   }
 
-  // 🎤 دالة تشغيل وإيقاف الاستماع بناءً على السويتش واللغة المحددة
   void _listen() async {
     if (!_isListening) {
       bool available = await _speech.initialize();
@@ -82,14 +75,11 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
           _statusText = _isArabic ? 'جاري الاستماع...' : 'Listening...';
         });
         _speech.listen(
-          localeId: _isArabic
-              ? 'ar-EG'
-              : 'en-US', // تحديد اللغة بناءً على السويتش
+          localeId: _isArabic ? 'ar-EG' : 'en-US',
           onResult: (val) {
             setState(() {
               _textController.text = val.recognizedWords;
             });
-            // إذا انتهى الكلام تماماً، اغلق المايك وابعت للسيرفر فوراً
             if (val.finalResult) {
               setState(() {
                 _isListening = false;
@@ -126,6 +116,14 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
       await _webViewController.runJavaScript(
         'window.loadModelFromBase64("$b64")',
       );
+
+      // 🔍 محاولة تقريب الكاميرا تلقائياً للموديل عند التحميل
+      // يمكنك تعديل الرقم 2.5 (تقليله يقرب أكثر، زيادته يبعد الأفاتار)
+      await _webViewController
+          .runJavaScript(
+            'if(window.camera) { window.camera.position.z = 2.5; if(window.controls) window.controls.update(); }',
+          )
+          .catchError((_) {});
     } catch (e) {
       debugPrint('[error] _sendModelToWebView: $e');
     }
@@ -196,8 +194,8 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
             ),
             const Divider(),
             _debugBtn(
-              '📷 إعادة الكاميرا للأمام',
-              'window.resetCamera && window.resetCamera()',
+              '📷 إعادة الكاميرا للأمام والتقريب',
+              'if(window.camera) { window.camera.position.set(0, 1.2, 2.5); if(window.controls) window.controls.update(); }',
             ),
             _debugBtn('↩ إعادة وضع الجسم الأصلي', 'window.resetPose()'),
           ],
@@ -237,12 +235,10 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
     );
   }
 
-  // 🎯 دالة الـ translate الشغالة والمطابقة لبيانات السيرفر مع إضافة غلق الكيبورد تلقائياً
   Future<void> _translate() async {
     final String text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    // ⌨️ إغلاق الكيبورد تلقائياً فور إرسال الطلب للسيرفر لراحة المستخدم
     FocusScope.of(context).unfocus();
 
     setState(() {
@@ -367,7 +363,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
       ),
       body: Column(
         children: [
-          // 3D viewer Container
           Expanded(
             flex: 4,
             child: Container(
@@ -386,7 +381,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
               ),
             ),
           ),
-          // Input panel
           Container(
             padding: const EdgeInsets.fromLTRB(25, 16, 25, 28),
             decoration: const BoxDecoration(
@@ -403,7 +397,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 🔄 زر السويتش لتحديد لغة الإدخال والمايك
                 Align(
                   alignment: Alignment.centerRight,
                   child: Container(
@@ -440,7 +433,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // حقل النص مدمج معه زر المايكروفون الذكي
                 TextField(
                   controller: _textController,
                   textAlign: TextAlign.center,
@@ -460,7 +452,7 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                         _isListening ? Icons.mic : Icons.mic_none,
                         color: _isListening ? Colors.red : appPrimaryColor,
                       ),
-                      onPressed: _listen, // استدعاء دالة تحويل الصوت الذكية
+                      onPressed: _listen,
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),

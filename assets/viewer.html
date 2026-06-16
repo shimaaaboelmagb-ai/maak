@@ -38,10 +38,11 @@
     scene.background = new THREE.Color(0xf8f9fa);
 
     // ── Camera ─────────────────────────────────────────────
+    // 🎯 [تعديل]: تقريب الكاميرا ورفعها للأعلى لتركيز المشهد على النصف العلوي فقط للأفاتار
     const camera = new THREE.PerspectiveCamera(
       40, window.innerWidth / window.innerHeight, 0.01, 100
     );
-    camera.position.set(0, 0.9, 3.8);
+    camera.position.set(0, 1.25, 1.8);
 
     // ── Renderer ───────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -62,11 +63,16 @@
     scene.add(fill);
 
     // ── Orbit controls ─────────────────────────────────────
+    // 🎯 [تعديل]: رفع نقطة ارتكاز الدوران (Target) لمنطقة الصدر والرقبة لراحة العين أثناء حركة الإشارة
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0.9, 0);
+    controls.target.set(0, 1.25, 0);
     controls.minDistance = 0.5;
     controls.maxDistance = 12;
     controls.update();
+
+    // جعل الكاميرا والـ controls متاحة عالمياً للوصول لها من كود Flutter إذا لزم الأمر
+    window.camera = camera;
+    window.controls = controls;
 
     // ── Bone & skeleton cache ──────────────────────────────
     const boneMap       = {};   
@@ -85,7 +91,6 @@
 
     const _tmpEuler = new THREE.Euler();
 
-    // 🛠️ [تعديل حرج لحل مشكلة رفع الأذرع]: ضبط المحاور والترتيب ليتناسب مع الموبايل والسيرفر معاً
     function applyBones(boneData) {
       for (const name in boneData) {
         const bone = boneMap[name];
@@ -93,12 +98,10 @@
         
         const [p, h, r] = boneData[name];
         
-        // تعديل الإشارات لمنع التداخل والارتفاع المفاجئ للكتف والدراع
         let corrected_X = p;   
         let corrected_Y = h;   
         let corrected_Z = -r;  
 
-        // استخدام ترتيب دوران YXZ لمنع حدوث الـ Gimbal Lock في أذرع الموديل
         _tmpEuler.set(corrected_X, corrected_Y, corrected_Z, 'YXZ');
         bone.quaternion.setFromEuler(_tmpEuler);
       }
