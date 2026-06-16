@@ -704,7 +704,7 @@ class _HelperHomeScreenState extends State<HelperHomeScreen> {
     final List<Widget> screens = [
       _buildHomeView(uid),
       const QuickSignsScreen(),
-      AiTranslatorScreen(),
+      const AiTranslatorScreen(),
       const CommunityScreen(isDarkMode: false),
       const ProfileHelperScreen(),
     ];

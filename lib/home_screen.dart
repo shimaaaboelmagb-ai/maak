@@ -192,8 +192,9 @@ class _HomeScreenState extends State<HomeScreen>
                                 setModalState(() {
                                   _emergencyContacts.removeAt(index);
                                   if (_activeContactIndex >=
-                                      _emergencyContacts.length)
+                                      _emergencyContacts.length) {
                                     _activeContactIndex = 0;
+                                  }
                                 });
                                 _saveContacts();
                               },
@@ -306,11 +307,12 @@ class _HomeScreenState extends State<HomeScreen>
             .doc(user.uid)
             .get();
         if (userDoc.exists) {
-          if (mounted)
+          if (mounted) {
             setState(
               () =>
                   _userName = (userDoc.get('fullName') as String).split(' ')[0],
             );
+          }
         }
       } catch (e) {
         debugPrint("Error: $e");
@@ -330,11 +332,12 @@ class _HomeScreenState extends State<HomeScreen>
         position.latitude,
         position.longitude,
       );
-      if (mounted)
+      if (mounted) {
         setState(
           () => _currentLocationText =
               "${placemarks.first.street}, ${placemarks.first.locality}",
         );
+      }
     } catch (e) {
       if (mounted) setState(() => _currentLocationText = "Location unknown");
     }
@@ -375,11 +378,12 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _cancelCountdown() {
     _sosTimer?.cancel();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isPressed = false;
         _countdown = 3;
       });
+    }
   }
 
   Future<void> _sendSOSRequest() async {

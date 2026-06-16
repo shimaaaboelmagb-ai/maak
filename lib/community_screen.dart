@@ -569,8 +569,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   Future<void> _postComment() async {
-    if (_commentController.text.trim().isEmpty && _commentLocationName == null)
+    if (_commentController.text.trim().isEmpty &&
+        _commentLocationName == null) {
       return;
+    }
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -663,15 +665,17 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
-                if (snapshot.data!.docs.isEmpty)
+                }
+                if (snapshot.data!.docs.isEmpty) {
                   return const Center(
                     child: Text(
                       "No comments yet.",
                       style: TextStyle(color: Colors.grey),
                     ),
                   );
+                }
 
                 return ListView.builder(
                   padding: const EdgeInsets.all(15),
@@ -866,10 +870,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       imageQuality: 30,
       maxWidth: 600,
     );
-    if (image != null)
+    if (image != null) {
       setState(() {
         _selectedImage = File(image.path);
       });
+    }
   }
 
   Future<void> _attachDynamicLocation() async {
@@ -890,8 +895,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> _publishPost() async {
     if (_postController.text.trim().isEmpty &&
         _selectedImage == null &&
-        _attachedLocationName == null)
+        _attachedLocationName == null) {
       return;
+    }
     setState(() {
       _isLoading = true;
     });
@@ -933,10 +939,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     } catch (e) {
       debugPrint("Publish error: $e");
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
+      }
     }
   }
 

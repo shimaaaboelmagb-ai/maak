@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:speech_to_text/speech_to_text.dart'
+    as stt; // 🎤 استيراد مكتبة الصوت
 
 class AiTranslatorScreen extends StatefulWidget {
   const AiTranslatorScreen({super.key});
@@ -14,21 +16,33 @@ class AiTranslatorScreen extends StatefulWidget {
 }
 
 class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
+  // 🎨 درجات الألوان المحدثة بناءً على الصورة المطلوبة تماماً
+  static const Color appPrimaryColor = Color(0xFF4E9BB6);
+  static const Color appBackgroundColor = Color(0xFFF3F7F9);
+  static const Color appSoftBlue = Color(0xFFD6E6ED);
+
   final TextEditingController _textController = TextEditingController();
   late final WebViewController _webViewController;
   bool _isLoading = false;
   String _statusText = '';
 
-  // رابط الـ API الخاص بك على Hugging Face Spaces
+  // 🎤 متغيرات تحويل الصوت إلى كلام واللغة
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  bool _isArabic =
+      true; // متغير التحكم في لغة السويتش (true = عربي، false = إنجليزي)
+
+  // رابط الـ API الخاص بك على Hugging Face Spaces كما هو
   static const String _apiUrl =
       'https://ismailabdulsalam-avater-api.hf.space/translate';
 
   @override
   void initState() {
     super.initState();
+    _initSpeech(); // تهيئة خدمة الصوت عند بدء الشاشة
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFFF8F9FA))
+      ..setBackgroundColor(appBackgroundColor)
       ..addJavaScriptChannel(
         'FlutterDebug',
         onMessageReceived: (msg) => _showDebugDialog(msg.message),
@@ -44,6 +58,59 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
         ),
       );
     _loadViewerHtml();
+  }
+
+  // 🎤 دالة تهيئة الصوت
+  Future<void> _initSpeech() async {
+    try {
+      await _speech.initialize(
+        onError: (val) => debugPrint('Speech Error: $val'),
+        onStatus: (val) => debugPrint('Speech Status: $val'),
+      );
+    } catch (e) {
+      debugPrint('Speech initialization failed: $e');
+    }
+  }
+
+  // 🎤 دالة تشغيل وإيقاف الاستماع بناءً على السويتش واللغة المحددة
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize();
+      if (available) {
+        setState(() {
+          _isListening = true;
+          _statusText = _isArabic ? 'جاري الاستماع...' : 'Listening...';
+        });
+        _speech.listen(
+          localeId: _isArabic
+              ? 'ar-EG'
+              : 'en-US', // تحديد اللغة بناءً على السويتش
+          onResult: (val) {
+            setState(() {
+              _textController.text = val.recognizedWords;
+            });
+            // إذا انتهى الكلام تماماً، اغلق المايك وابعت للسيرفر فوراً
+            if (val.finalResult) {
+              setState(() {
+                _isListening = false;
+              });
+              _translate();
+            }
+          },
+        );
+      } else {
+        _showError(
+          _isArabic
+              ? "خاصية التعرف على الصوت غير متاحة"
+              : "Speech recognition not available",
+        );
+      }
+    } else {
+      setState(() {
+        _isListening = false;
+      });
+      _speech.stop();
+    }
   }
 
   Future<void> _loadViewerHtml() async {
@@ -142,6 +209,7 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
   Widget _debugBtn(String label, String js) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: OutlinedButton(
+      style: OutlinedButton.styleFrom(foregroundColor: appPrimaryColor),
       onPressed: () {
         Navigator.pop(context);
         _runDebug(js);
@@ -169,14 +237,19 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
     );
   }
 
-  // 🎯 الدالة المحدثة كلياً لتتوافق مع الـ API الجديد وتمنع خطأ الـ Format
+  // 🎯 دالة الـ translate الشغالة والمطابقة لبيانات السيرفر مع إضافة غلق الكيبورد تلقائياً
   Future<void> _translate() async {
     final String text = _textController.text.trim();
     if (text.isEmpty) return;
 
+    // ⌨️ إغلاق الكيبورد تلقائياً فور إرسال الطلب للسيرفر لراحة المستخدم
+    FocusScope.of(context).unfocus();
+
     setState(() {
       _isLoading = true;
-      _statusText = 'جاري الاتصال بالسيرفر...';
+      _statusText = _isArabic
+          ? 'جاري الاتصال بالسيرفر...'
+          : 'Connecting to server...';
     });
 
     try {
@@ -193,7 +266,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
       if (response.statusCode == 200) {
         final dynamic json = jsonDecode(response.body);
 
-        // هنا بنقرأ مصفوفة الـ frames مباشرة من السيرفر الجديد
         if (json is Map<String, dynamic> && json['frames'] is List) {
           final List<Map<String, dynamic>> allFrames = [];
           double timeOffset = 0.0;
@@ -205,7 +277,6 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
 
             final Map<String, List<double>> bones = {};
 
-            // نلف على الـ Bones مباشرة لأن العظام أصبحت في الـ Root بتاع الـ frame
             frame.forEach((name, angles) {
               if (angles is Map<String, dynamic>) {
                 final double h =
@@ -215,33 +286,40 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                 final double r =
                     ((angles['r'] ?? 0) as num).toDouble() * (math.pi / 180);
 
-                // تنظيف الـ Key من النقطتين (:) لتتوافق مع الـ Three.js في الـ WebView
                 bones[name.replaceAll(':', '')] = [p, h, r];
               }
             });
 
-            // حساب التوقيت الزمني لكل فريم تلقائياً (50 فريم في الثانية = 0.02 ثانية لكل فريم)
             allFrames.add({'time': timeOffset + (i * 0.02), 'bones': bones});
           }
 
           if (allFrames.isNotEmpty) {
-            setState(() => _statusText = 'جاري التحريك...');
+            setState(
+              () =>
+                  _statusText = _isArabic ? 'جاري التحريك...' : 'Animating...',
+            );
             await _playAnimation(allFrames);
-            setState(() => _statusText = 'تم ✓');
+            setState(() => _statusText = _isArabic ? 'تم ✓' : 'Done ✓');
             await Future.delayed(const Duration(seconds: 2));
             if (mounted) setState(() => _statusText = '');
           }
         } else {
-          _showError("تنسيق بيانات غير متوقع");
+          _showError(
+            _isArabic ? "تنسيق بيانات غير متوقع" : "Unexpected data format",
+          );
           debugPrint('[API] Unexpected format: ${json.runtimeType}');
         }
       } else {
-        _showError("خطأ من السيرفر: ${response.statusCode}");
+        _showError(
+          "${_isArabic ? 'خطأ من السيرفر' : 'Server Error'}: ${response.statusCode}",
+        );
       }
     } on TimeoutException {
-      _showError("انتهى الوقت — جرب مرة تانية");
+      _showError(
+        _isArabic ? "انتهى الوقت — جرب مرة تانية" : "Timeout — try again",
+      );
     } catch (e) {
-      _showError("خطأ في الاتصال");
+      _showError(_isArabic ? "خطأ في الاتصال" : "Connection error");
       debugPrint('[error] $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -265,14 +343,14 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: appBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'MAAK - AI Avatar',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.teal[800],
+        backgroundColor: appPrimaryColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
@@ -289,14 +367,15 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
       ),
       body: Column(
         children: [
-          // 3D viewer
+          // 3D viewer Container
           Expanded(
             flex: 4,
             child: Container(
               margin: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(25),
+                border: Border.all(color: appSoftBlue, width: 1.5),
                 boxShadow: const [
                   BoxShadow(color: Colors.black12, blurRadius: 10),
                 ],
@@ -309,7 +388,7 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
           ),
           // Input panel
           Container(
-            padding: const EdgeInsets.fromLTRB(25, 24, 25, 28),
+            padding: const EdgeInsets.fromLTRB(25, 16, 25, 28),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(35)),
@@ -324,15 +403,65 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 🔄 زر السويتش لتحديد لغة الإدخال والمايك
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: appSoftBlue,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _isArabic ? 'العربية' : 'English',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: appPrimaryColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          height: 30,
+                          child: Switch(
+                            value: _isArabic,
+                            activeColor: appPrimaryColor,
+                            onChanged: (v) => setState(() => _isArabic = v),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // حقل النص مدمج معه زر المايكروفون الذكي
                 TextField(
                   controller: _textController,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 18),
                   decoration: InputDecoration(
-                    hintText: 'اكتب كلمة مثال: hello',
+                    hintText: _isArabic
+                        ? 'اكتب كلمة أو اضغط على المايك'
+                        : 'Type a word or press mic',
                     filled: true,
-                    fillColor: Colors.grey[100],
-                    prefixIcon: const Icon(Icons.keyboard, color: Colors.teal),
+                    fillColor: appBackgroundColor,
+                    prefixIcon: const Icon(
+                      Icons.keyboard,
+                      color: appPrimaryColor,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isListening ? Icons.mic : Icons.mic_none,
+                        color: _isListening ? Colors.red : appPrimaryColor,
+                      ),
+                      onPressed: _listen, // استدعاء دالة تحويل الصوت الذكية
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
                       borderSide: BorderSide.none,
@@ -347,7 +476,7 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                   Text(
                     _statusText,
                     style: TextStyle(
-                      color: Colors.teal[700],
+                      color: _isListening ? Colors.red[700] : appPrimaryColor,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -369,16 +498,18 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                           )
                         : const Icon(Icons.sign_language, size: 26),
                     label: Text(
-                      _isLoading ? 'جاري المعالجة...' : 'ابدأ الإشارة',
+                      _isLoading
+                          ? (_isArabic ? 'جاري المعالجة...' : 'Processing...')
+                          : (_isArabic ? 'ابدأ الإشارة' : 'Start Signing'),
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal[800],
+                      backgroundColor: appPrimaryColor,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.teal[300],
+                      disabledBackgroundColor: appSoftBlue,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
