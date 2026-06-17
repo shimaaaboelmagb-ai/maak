@@ -110,15 +110,13 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
 
   Future<void> _sendModelToWebView() async {
     try {
-      final data = await rootBundle.load('assets/pro.glb');
+      final data = await rootBundle.load('assets/Sro.glb');
       final String b64 = base64Encode(data.buffer.asUint8List());
       debugPrint('[GLB] ${data.lengthInBytes ~/ 1024} KB — sending to JS...');
       await _webViewController.runJavaScript(
         'window.loadModelFromBase64("$b64")',
       );
 
-      // 🔍 محاولة تقريب الكاميرا تلقائياً للموديل عند التحميل
-      // يمكنك تعديل الرقم 2.5 (تقليله يقرب أكثر، زيادته يبعد الأفاتار)
       await _webViewController
           .runJavaScript(
             'if(window.camera) { window.camera.position.z = 2.5; if(window.controls) window.controls.update(); }',
@@ -282,7 +280,8 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                 final double r =
                     ((angles['r'] ?? 0) as num).toDouble() * (math.pi / 180);
 
-                bones[name.replaceAll(':', '')] = [p, h, r];
+                // 🎯 [تعديل]: بنبعت اسم العظمة كامل زي ما جاي من الـ API (بالنقطتين) والـ JS هينضفها
+                bones[name] = [p, h, r];
               }
             });
 
@@ -424,7 +423,7 @@ class _AiTranslatorScreenState extends State<AiTranslatorScreen> {
                           height: 30,
                           child: Switch(
                             value: _isArabic,
-                            activeColor: appPrimaryColor,
+                            activeThumbColor: appPrimaryColor,
                             onChanged: (v) => setState(() => _isArabic = v),
                           ),
                         ),

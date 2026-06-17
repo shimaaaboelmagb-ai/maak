@@ -119,7 +119,7 @@ flutter:
     - assets/Daily signals/
     - assets/Emergency/
     - assets/Numbers/
-    - assets/pro.glb
+    - assets/Sro.glb
     - assets/viewer.html
   # To add assets to your application, add an assets section, like this:
   # assets:

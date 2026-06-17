@@ -38,7 +38,6 @@
     scene.background = new THREE.Color(0xf8f9fa);
 
     // ── Camera ─────────────────────────────────────────────
-    // 🎯 [تعديل]: تقريب الكاميرا ورفعها للأعلى لتركيز المشهد على النصف العلوي فقط للأفاتار
     const camera = new THREE.PerspectiveCamera(
       40, window.innerWidth / window.innerHeight, 0.01, 100
     );
@@ -63,14 +62,12 @@
     scene.add(fill);
 
     // ── Orbit controls ─────────────────────────────────────
-    // 🎯 [تعديل]: رفع نقطة ارتكاز الدوران (Target) لمنطقة الصدر والرقبة لراحة العين أثناء حركة الإشارة
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 1.25, 0);
     controls.minDistance = 0.5;
     controls.maxDistance = 12;
     controls.update();
 
-    // جعل الكاميرا والـ controls متاحة عالمياً للوصول لها من كود Flutter إذا لزم الأمر
     window.camera = camera;
     window.controls = controls;
 
@@ -91,12 +88,33 @@
 
     const _tmpEuler = new THREE.Euler();
 
+    // 🎯 [دالة التنقية والربط المحدثة والتلقائية]
     function applyBones(boneData) {
-      for (const name in boneData) {
-        const bone = boneMap[name];
+      // دالة مساعدة لتنقية الاسم تماماً من كلمة mixamorig والأرقام والنقطتين
+      function getCleanBoneName(name) {
+        return name.toLowerCase()
+                   .replace(/mixamorig\d*:/g, '') // بتطير mixamorig10:
+                   .replace(/mixamorig\d*/g, '')  // بتطير mixamorig7
+                   .replace(/[^a-z0-9]/g, '')     // بتشيل أي علامات غريبة
+                   .trim();
+      }
+
+      for (const rawName in boneData) {
+        const cleanApiName = getCleanBoneName(rawName);
+        let bone = null;
+
+        // البحث والمقارنة بالأسماء المنقاة الصافية بين الطرفين
+        for (const actualName in boneMap) {
+          if (getCleanBoneName(actualName) === cleanApiName) {
+            bone = boneMap[actualName];
+            break;
+          }
+        }
+
+        // لو ملهاش تطابق فوتها للأمان
         if (!bone) continue;
         
-        const [p, h, r] = boneData[name];
+        const [p, h, r] = boneData[rawName];
         
         let corrected_X = p;   
         let corrected_Y = h;   

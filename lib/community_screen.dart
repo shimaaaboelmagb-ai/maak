@@ -391,16 +391,27 @@ class _PostItemWidgetState extends State<PostItemWidget> {
                 ),
               ),
             ],
-            if (base64Image != null && base64Image.isNotEmpty)
+            if (base64Image != null && base64Image.trim().isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 15),
                 width: double.infinity,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.memory(
-                    base64Decode(base64Image),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
+                  child: Builder(
+                    builder: (context) {
+                      try {
+                        return Image.memory(
+                          base64Decode(base64Image.trim()),
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const SizedBox.shrink();
+                          },
+                        );
+                      } catch (e) {
+                        return const SizedBox.shrink();
+                      }
+                    },
                   ),
                 ),
               ),
@@ -994,6 +1005,30 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ),
               ),
             ),
+            if (_selectedImage != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 15),
+                height: 200,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  image: DecorationImage(
+                    image: FileImage(_selectedImage!),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.cancel, color: Colors.red, size: 30),
+                    onPressed: () {
+                      setState(() {
+                        _selectedImage = null;
+                      });
+                    },
+                  ),
+                ),
+              ),
             if (_attachedLocationName != null)
               ListTile(
                 leading: const Icon(
@@ -1041,7 +1076,7 @@ class MapSelectionScreen extends StatefulWidget {
 
 class _MapSelectionScreenState extends State<MapSelectionScreen> {
   GoogleMapController? _mapController;
-  LatLng _selectedCenter = const LatLng(30.0444, 31.2357); // القاهرة
+  LatLng _selectedCenter = const LatLng(30.0444, 31.2357);
   String _addressName = "Click map to choose location";
 
   @override
